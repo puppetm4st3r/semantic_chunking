@@ -2,7 +2,88 @@
 
 ## Introduction
 
-This repository provides a comprehensive set of tools for natural language processing, text chunking, semantic analysis, and question answering with RAG (Retrieval-Augmented Generation) capabilities. It's designed to process, analyze, and extract meaningful information from text documents, particularly focusing on Spanish-language texts. The toolkit combines classical information retrieval techniques with modern embedding-based semantic search approaches to offer robust text analysis capabilities.
+This repository provides a comprehensive set of tools for natural language processing, text chunking, semantic analysis, and question answering with RAG (Retrieval-Augmented Generation) capabilities. It's designed to process, analyze, and extract meaningful information from text documents, particularly focusing on Spanish-language texts. The toolkit implements a sophisticated hybrid search system that combines traditional full-text search with modern vector-based semantic search, delivering highly relevant results for complex queries.
+
+### Technical Architecture
+
+The core functionality in `tools.py` implements a complete RAG (Retrieval-Augmented Generation) pipeline with the following detailed components:
+
+#### 1. Text Processing and Normalization
+The system includes specialized functions for handling Spanish text, such as `normalize_spanish_text()`, which removes accents and normalizes special characters through character mapping. This ensures consistent text representation regardless of accent variations common in Spanish language texts. The text processing pipeline also includes functions like `format_text_with_line_breaks()` for proper text formatting and `process_text_into_chunks()` which uses regex patterns and language structure rules to intelligently divide text into semantically coherent units.
+
+#### 2. Semantic Text Chunking
+Text is broken into semantically meaningful chunks through a multi-stage process:
+- Initial chunking using paragraph and sentence boundaries
+- Refinement using semantic similarity thresholds, specifically detecting significant content shifts at the 95th percentile of cosine distance between adjacent chunk embeddings
+- The `SemanticSplitGenerator.get_breakpoints()` method identifies these semantic boundaries by analyzing embedding distance patterns
+- The system identifies natural semantic breakpoints where the cosine distance between embeddings exceeds the threshold, indicating a topic or content transition
+- Further semantic analysis using embedding-based clustering to identify thematic relationships
+- The `process_text_into_chunks()` function implements a sophisticated algorithm that joins lines where the next line doesn't start with an uppercase letter, splits by double newlines, and further divides text where periods are followed by uppercase letters to preserve logical document structure.
+
+#### 3. Keyword Extraction with BM25
+The system employs the Okapi BM25 ranking algorithm (implemented in `extract_keywords_with_bm25()`) to identify the most relevant keywords from each text fragment:
+- For each text fragment, the function tokenizes and cleans both the fragment and the full text
+- Creates a corpus from paragraphs or sentences in the full text
+- Applies BM25 scoring to calculate the relevance of each term in the fragment against the full corpus
+- Filters Spanish stopwords using NLTK or a fallback list when NLTK is unavailable
+- Parallelizes keyword extraction for efficiency using Python's `concurrent.futures` with configurable worker limits
+
+#### 4. Vector Database Implementation
+The system uses PostgreSQL with the pgvector extension to store and retrieve vector embeddings:
+- `initialize_vector_database()` sets up PostgreSQL with pgvector extension and creates the necessary tables
+- `check_chunks_table()` ensures proper table structure with vector dimensions matching the embedding model
+- The database schema includes dedicated columns for:
+  - Raw text content (`content`)
+  - Vector embeddings (`content_vector` using pgvector's vector type)
+  - Text search index (`content_tsvector` as a generated column using PostgreSQL's `to_tsvector('spanish', content)`)
+  - Metadata in JSONB format (storing keywords, timestamps, etc.)
+- Creates optimal indices for both vector and text search:
+  - HNSW (Hierarchical Navigable Small World) index for efficient vector search with configurable parameters (`ef_construction = 200, m = 16`)
+  - GIN index for PostgreSQL's full-text search on the tsvector column
+
+#### 5. Hybrid Search Implementation
+The `hybrid_search()` function implements a sophisticated dual-retrieval approach:
+- **Vector Similarity Search**:
+  - Converts query text to vector embedding using OpenAI-compatible models
+  - Uses pgvector's vector distance operator (`<=>`) to find semantically similar documents
+  - Calculates a normalized similarity score (0-100) based on vector cosine distance
+  
+- **Full-Text Keyword Search**:
+  - Extracts keywords from the query after removing Spanish stopwords
+  - Uses PostgreSQL's `websearch_to_tsquery('spanish', keywords)` to create a text search query
+  - Employs `ts_rank_cd` with custom weight configurations `'{0.1, 0.2, 0.4, 1.0}'` to prioritize document sections
+  - Boosts scores based on exact keyword matches with context-aware weighting
+
+#### 6. Result Fusion and Ranking
+The `reciprocal_rank_fusion()` function implements a modified version of the Reciprocal Rank Fusion (RRF) algorithm:
+- Combines results from both vector and text searches using a weighted approach
+- For each document, calculates a fusion score using the formula: `1/(k + rank)` where k is a constant (default: 60)
+- Weights the RRF components based on the original relevance scores from each method
+- Applies a 20% boost to documents found by both search methods
+- Normalizes final scores to a 0-100 range for consistency
+- Returns a combined list of results sorted by the fused relevance score
+
+The algorithm specifically:
+1. Processes vector and text search results separately, calculating RRF components for each
+2. Assigns weights based on original relevance scores to preserve quality signals
+3. Incorporates both rank position and score magnitude in the final fusion formula
+4. Accounts for the "methods_count" to give preference to documents found through multiple search methods
+5. Produces a unified, re-ranked list of the most relevant context documents
+
+#### 7. Answer Generation
+The system implements two approaches for answer generation:
+- `answer_question_with_context()`: Standard synchronous response generation
+- `answer_question_with_context_streaming()`: Token-by-token streaming for real-time responses
+
+Both functions:
+- Format retrieved context documents with sequential numbering
+- Construct a prompt that includes the query and retrieved context
+- Call the language model (OpenAI API or compatible local model)
+- Apply appropriate system instructions to generate concise, accurate answers
+
+### Deployment Flexibility
+
+The implementation is designed to work with either OpenAI's API or local language models through compatible interfaces like vLLM, making it flexible for various deployment scenarios. For local deployments, the system uses identical API signatures but points to local endpoints, ensuring a consistent interface regardless of the underlying model provider.
 
 ## Repository Structure
 
@@ -221,4 +302,4 @@ The semantic chunking and visualization functionality in this repository is base
 
 Copyright © 2025 Dolfs SpA (https://www.dolfs.io)
 
-This project is licensed under the MIT License. 
+This project is licensed under the MIT License.
