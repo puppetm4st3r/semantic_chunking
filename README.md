@@ -4,6 +4,8 @@
 
 This repository provides a comprehensive set of tools for natural language processing, text chunking, semantic analysis, and question answering with RAG (Retrieval-Augmented Generation) capabilities. It's designed to process, analyze, and extract meaningful information from text documents, particularly focusing on Spanish-language texts. The toolkit implements a sophisticated hybrid search system that combines traditional full-text search with modern vector-based semantic search, delivering highly relevant results for complex queries.
 
+Conceptual details at [Medium post](https://medium.com/@prudant/splitting-with-purpose-semantic-chunking-for-advanced-rag-systems-dbbdb73fe421)
+
 ### Technical Architecture
 
 The core functionality in `tools.py` implements a complete RAG (Retrieval-Augmented Generation) pipeline with the following detailed components:
