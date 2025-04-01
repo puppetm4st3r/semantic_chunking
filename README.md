@@ -300,6 +300,6 @@ The semantic chunking and visualization functionality in this repository is base
 
 ## Copyright and License
 
-With ❤️ from Dolfs SpA (https://www.dolfs.io)
+With ❤️ from Dolfs AI (https://www.dolfs.io)
 
 This project is licensed under the MIT License.
